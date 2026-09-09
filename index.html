@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patitas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+:root{
+  --paper:#EDF1F5;--ink:#1B2B3A;--celeste:#7FA8D4;--deep:#4E7CA8;
+  --terracota:#C4634F;--sage:#7E8F87;--line:#C6D2DE;--white:#FBFCFD;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"Source Sans 3",system-ui,sans-serif;font-size:16px;line-height:1.5}
+h1,h2,h3,.nw{font-family:"Archivo Narrow",system-ui,sans-serif;font-weight:600}
+a{color:var(--deep)}
+.wrap{max-width:1120px;margin:0 auto;padding:30px 24px 90px}
+.narrowcol{max-width:430px;margin:0 auto;padding:44px 24px 90px}
+
+/* barra superior */
+.top{display:flex;align-items:center;gap:13px;padding:16px 24px;border-bottom:1px solid var(--line);background:var(--white)}
+.mark{width:30px;height:35px;flex:none}
+.wordmark{font-family:"Archivo Narrow";font-weight:700;font-size:23px;letter-spacing:.09em;line-height:1}
+.top .sp{flex:1}
+.who{font-size:14px;color:var(--sage)}
+
+/* controles */
+label{display:block;font-size:14px;color:var(--sage);margin:0 0 5px}
+input,textarea,select{width:100%;font:inherit;font-size:15px;color:var(--ink);background:var(--white);border:1px solid var(--line);border-radius:7px;padding:9px 11px}
+textarea{resize:vertical;min-height:62px}
+input:focus,textarea:focus{outline:2px solid var(--celeste);outline-offset:1px;border-color:var(--celeste)}
+.field{margin-bottom:14px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:560px){.row{grid-template-columns:1fr}}
+.btn{font:inherit;font-size:15px;font-weight:600;cursor:pointer;border:0;border-radius:8px;padding:11px 18px;background:var(--deep);color:#fff}
+.btn:hover{background:#3f6b95}
+.btn.ghost{background:transparent;color:var(--deep);border:1.5px solid var(--deep)}
+.btn.ghost:hover{background:#e2ebf3}
+.btn.quiet{background:transparent;color:var(--sage);padding:11px 0}
+.btn.wide{width:100%}
+.btn:disabled{opacity:.5;cursor:default}
+.err{background:#FAEFEC;border:1px solid var(--terracota);color:#8d3f2f;border-radius:8px;padding:10px 13px;font-size:14.5px;margin-bottom:16px}
+.ok{background:#E8F0E9;border:1px solid #7E8F87;border-radius:8px;padding:10px 13px;font-size:14.5px;margin-bottom:16px}
+.card{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:22px}
+h1.page{font-size:31px;margin:0 0 4px}
+.sub{color:var(--sage);margin:0 0 26px}
+fieldset{border:0;border-top:1px solid var(--line);margin:0 0 26px;padding:18px 0 0}
+legend{font-family:"Archivo Narrow";font-weight:600;font-size:18px;padding-right:12px}
+.hint{color:var(--sage);font-size:14px;margin:-2px 0 15px}
+.switch{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.switch input{width:17px;height:17px;margin:3px 0 0;flex:none;accent-color:var(--deep)}
+.switch span{font-size:14.5px}
+.switch small{display:block;color:var(--sage);font-size:13.5px}
+
+/* lista de mascotas */
+.pets{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px;margin-top:8px}
+.pet{background:var(--white);border:1px solid var(--line);border-radius:12px;overflow:hidden;text-decoration:none;color:inherit;display:block}
+.pet:hover{border-color:var(--celeste)}
+.pet .ph{height:132px;background:var(--celeste) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.9);font-size:14px}
+.pet .bd{padding:13px 15px}
+.pet h3{margin:0;font-size:20px}
+.pet p{margin:2px 0 0;color:var(--sage);font-size:14px}
+.chip{display:inline-block;font-size:12.5px;border-radius:999px;padding:2px 9px;margin-top:8px;border:1px solid var(--line);color:var(--sage)}
+.chip.on{border-color:var(--terracota);color:var(--terracota);background:#FAEFEC}
+.chip.tag{border-color:var(--celeste);color:var(--deep)}
+.empty{background:var(--white);border:1px dashed var(--line);border-radius:12px;padding:40px 24px;text-align:center}
+.empty p{color:var(--sage);margin:0 0 18px}
+
+/* editor */
+.split{display:grid;grid-template-columns:minmax(0,1fr) 348px;gap:40px}
+@media(max-width:920px){.split{grid-template-columns:1fr}}
+.side{position:sticky;top:22px;align-self:start}
+.phone{background:var(--white);border:1px solid var(--line);border-radius:20px;padding:8px;box-shadow:0 14px 32px -20px rgba(27,43,58,.45)}
+.screen{border-radius:14px;overflow:hidden}
+
+/* perfil público */
+.pub{max-width:430px;margin:0 auto;background:var(--white);min-height:100vh}
+.banner{background:var(--terracota);color:#fff;padding:12px 17px;font-size:14.5px}
+.banner b{font-family:"Archivo Narrow";font-size:17px;letter-spacing:.03em;display:block}
+.photo{height:172px;background:var(--celeste) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.85);font-size:14px}
+.pbody{padding:18px 19px 26px}
+.pname{font-family:"Archivo Narrow";font-weight:700;font-size:31px;line-height:1.05;margin:0}
+.pbreed{color:var(--sage);font-size:14.5px;margin:3px 0 16px}
+.call{display:block;text-decoration:none;text-align:center;border-radius:9px;padding:14px;font-size:17px;font-weight:600;margin-bottom:9px}
+.c1{background:var(--deep);color:#fff}
+.c2{background:var(--white);color:var(--deep);border:1.5px solid var(--deep)}
+.callnum{font-weight:400;font-size:14.5px;opacity:.85;display:block}
+.facts{margin:18px 0 0;border-top:1px solid var(--line);padding-top:13px}
+.fact{display:flex;gap:12px;padding:7px 0;font-size:14.5px}
+.fact dt{color:var(--sage);flex:none;width:86px;margin:0}
+.fact dd{margin:0;flex:1}
+.med{background:#F3F0E6;border-left:3px solid #B79A4B;padding:10px 12px;border-radius:0 7px 7px 0;margin-top:15px;font-size:14.5px}
+.med b{display:block;font-family:"Archivo Narrow";font-size:15.5px;margin-bottom:2px}
+.foot{margin-top:20px;padding-top:12px;border-top:1px solid var(--line);color:var(--sage);font-size:13px;text-align:center}
+
+/* QR */
+.qrbox{margin-top:24px;background:var(--white);border:1px solid var(--line);border-radius:12px;padding:19px;text-align:center}
+.qrbox h3{margin:0 0 3px;font-size:18px}
+.qrbox p{margin:0 0 14px;color:var(--sage);font-size:14px}
+#qr,.qrslot{display:inline-block;padding:9px;background:#fff;border:1px solid var(--line);border-radius:8px;line-height:0}
+.url{font-family:"Archivo Narrow";font-size:15px;margin:12px 0 14px;word-break:break-all;color:var(--deep)}
+.note{color:var(--sage);font-size:13px;margin:11px 0 0}
+.demoflag{background:var(--white);border-bottom:1px solid var(--line);color:var(--sage);font-size:13.5px;padding:11px 24px;text-align:center}
+.seed{background:#E9EFF5;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:14px;margin-top:16px}
+.seed code{font-family:"Archivo Narrow";font-size:15px;letter-spacing:.05em;color:var(--deep)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ============ almacenamiento ============ */
+const mem = new Map();
+const hasStore = typeof window.storage !== "undefined" && window.storage;
+async function get(k, d){
+  if (hasStore){ try { const r = await window.storage.get(k); return r ? JSON.parse(r.value) : d; } catch(e){ return d; } }
+  return mem.has(k) ? mem.get(k) : d;
+}
+async function set(k, v){
+  if (hasStore){ try { await window.storage.set(k, JSON.stringify(v)); return; } catch(e){} }
+  mem.set(k, v);
+}
+
+/* ============ utilidades ============ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[<>&"]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+const alfa = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const rand = n => Array.from({length:n}, () => alfa[Math.floor(Math.random()*alfa.length)]).join("");
+const uid  = () => Date.now().toString(36) + rand(4);
+const tel  = t => String(t||"").replace(/\D/g,"");
+const wa   = t => { const d = tel(t); return d.startsWith("504") ? d : "504" + d; };
+async function hash(s){
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2,"0")).join("");
+}
+const BASE = "patitasmascotas.com/p/";
+
+/* ============ estado ============ */
+let S = { email:null, users:{}, pets:[], tags:{} };
+
+async function load(){
+  S.users = await get("pt:users", {});
+  S.tags  = await get("pt:tags", null);
+  if (!S.tags){                       // lote de fábrica de ejemplo
+    S.tags = {};
+    ["481920","307455","662108"].forEach(pin => { S.tags[rand(8)] = {pin, petId:null, owner:null}; });
+    await set("pt:tags", S.tags);
+  }
+  S.email = await get("pt:session", null);
+  if (S.email) S.pets = await get("pt:pets:" + S.email, []);
+}
+const savePets = () => set("pt:pets:" + S.email, S.pets);
+const petBy = id => S.pets.find(p => p.id === id);
+const petByCode = c => { const t = S.tags[c]; return t && t.petId ? petBy(t.petId) : null; };
+const codeOf = id => Object.keys(S.tags).find(c => S.tags[c].petId === id) || null;
+
+/* ============ chrome ============ */
+const LOGO = `<svg class="mark" viewBox="0 0 48 56" aria-hidden="true">
+  <circle cx="24" cy="21" r="18" fill="#7FA8D4"/>
+  <path d="M24 3a18 18 0 1 0 0 36 13 13 0 0 1 0-36z" fill="#FBFCFD"/>
+  <circle cx="20.5" cy="16" r="2.8" fill="#1B2B3A"/>
+  <rect x="21" y="37" width="6" height="17" rx="3" fill="#7FA8D4"/></svg>`;
+
+const bar = () => `<header class="top">${LOGO}
+  <div class="wordmark">PATITAS</div><div class="sp"></div>
+  ${S.email ? `<span class="who">${esc(S.email)}</span>
+    <button class="btn ghost" id="out" style="padding:7px 14px;font-size:14px">Salir</button>` : ""}
+</header>
+<p class="demoflag">Demo funcional. Las cuentas y las mascotas se guardan en este navegador.</p>`;
+
+/* ============ pantallas ============ */
+function vEntrar(msg){
+  return bar() + `<div class="narrowcol">
+    <h1 class="page">Entrar a Patitas</h1>
+    <p class="sub">Creá una cuenta para registrar a tus mascotas y vincular sus placas.</p>
+    ${msg ? `<div class="err">${esc(msg)}</div>` : ""}
+    <div class="card">
+      <div class="field"><label for="em">Correo</label><input id="em" type="email" autocomplete="username"></div>
+      <div class="field"><label for="pw">Contraseña</label><input id="pw" type="password" autocomplete="current-password"></div>
+      <button class="btn wide" id="in">Entrar</button>
+      <button class="btn quiet wide" id="up">No tengo cuenta, crear una</button>
+    </div>
+  </div>`;
+}
+
+function vPanel(){
+  const cards = S.pets.map(p => {
+    const c = codeOf(p.id);
+    return `<a class="pet" href="#/mascota/${p.id}">
+      <div class="ph" ${p.photo ? `style="background-image:url(${p.photo})"` : ""}>${p.photo ? "" : "Sin foto"}</div>
+      <div class="bd"><h3>${esc(p.name)}</h3><p>${esc(p.breed || p.species)}</p>
+        ${p.lost ? `<span class="chip on">Perdida</span>` : ""}
+        <span class="chip ${c ? "tag" : ""}">${c ? "Placa " + c : "Sin placa"}</span>
+      </div></a>`;
+  }).join("");
+
+  return bar() + `<div class="wrap">
+    <h1 class="page">Tus mascotas</h1>
+    <p class="sub">Cada una tiene su perfil y su placa con código propio.</p>
+    ${S.pets.length ? `<div class="pets">${cards}</div>
+       <p style="margin-top:24px"><button class="btn" id="new">Registrar otra mascota</button></p>`
+      : `<div class="empty"><p>Todavía no has registrado ninguna mascota.</p>
+         <button class="btn" id="new">Registrar la primera</button></div>`}
+  </div>`;
+}
+
+const form = (p={}) => `
+  <fieldset><legend>Quién es</legend>
+    <div class="row">
+      <div class="field"><label for="f_name">Nombre</label><input id="f_name" value="${esc(p.name)}"></div>
+      <div class="field"><label for="f_breed">Raza o mezcla</label><input id="f_breed" value="${esc(p.breed)}"></div>
+    </div>
+    <div class="field"><label for="f_photo">Foto</label><input id="f_photo" type="file" accept="image/*"></div>
+    <div class="field"><label for="f_temp">Cómo tratarla</label><textarea id="f_temp">${esc(p.temperament)}</textarea></div>
+  </fieldset>
+  <fieldset><legend>A quién llamar</legend>
+    <p class="hint">El botón del perfil abre el marcador con este número ya cargado.</p>
+    <div class="row">
+      <div class="field"><label for="f_owner">Tu nombre</label><input id="f_owner" value="${esc(p.ownerName)}"></div>
+      <div class="field"><label for="f_t1">Teléfono principal</label><input id="f_t1" value="${esc(p.phone1)}"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label for="f_t2">Segundo teléfono</label><input id="f_t2" value="${esc(p.phone2)}"></div>
+      <div class="field"><label for="f_zone">Zona donde vive</label><input id="f_zone" value="${esc(p.zone)}"></div>
+    </div>
+    <label class="switch"><input type="checkbox" id="f_showzone" ${p.showZone !== false ? "checked" : ""}>
+      <span>Mostrar la zona<small>Solo la colonia, nunca la dirección exacta.</small></span></label>
+  </fieldset>
+  <fieldset><legend>Salud</legend>
+    <div class="row">
+      <div class="field"><label for="f_vet">Veterinaria de cabecera</label><input id="f_vet" value="${esc(p.vet)}"></div>
+      <div class="field"><label for="f_vac">Vacunas</label><input id="f_vac" value="${esc(p.vaccines)}"></div>
+    </div>
+    <div class="field"><label for="f_med">Alergias, condiciones, medicamentos</label><textarea id="f_med">${esc(p.medical)}</textarea></div>
+  </fieldset>`;
+
+function vNueva(){
+  return bar() + `<div class="narrowcol" style="max-width:640px">
+    <h1 class="page">Registrar una mascota</h1>
+    <p class="sub">Podés vincular la placa después, cuando la tengas en la mano.</p>
+    <div class="card" id="fm">${form({})}
+      <button class="btn wide" id="save">Guardar mascota</button></div>
+  </div>`;
+}
+
+function vMascota(id){
+  const p = petBy(id); if (!p) return vPanel();
+  const code = codeOf(id);
+  return bar() + `<div class="wrap"><div class="split">
+    <div>
+      <h1 class="page">${esc(p.name)}</h1>
+      <p class="sub">Los cambios se ven en el perfil público al instante, sin reimprimir la placa.</p>
+      <div id="msg"></div>
+      <div class="card" id="fm">${form(p)}
+        <fieldset><legend>Estado</legend>
+          <label class="switch" style="background:#FAEFEC;border:1px solid var(--terracota);border-radius:9px;padding:13px 15px">
+            <input type="checkbox" id="f_lost" ${p.lost ? "checked" : ""}>
+            <span><b>Marcarla como perdida</b>
+              <small>El perfil pasa a rojo y avisa que la están buscando.</small></span></label>
+        </fieldset>
+        <button class="btn wide" id="save">Guardar cambios</button>
+        <button class="btn quiet wide" id="del">Eliminar esta mascota</button>
+      </div>
+    </div>
+    <aside class="side">
+      <div class="phone"><div class="screen" id="prev"></div></div>
+      <div class="qrbox">
+        ${code ? `<h3>Placa ${esc(code)}</h3><p>Este código no cambia nunca.</p>
+          <div class="qrslot" id="qr"></div>
+          <div class="url">${BASE}${esc(code)}</div>
+          <button class="btn wide" id="dl">Descargar QR para imprimir</button>
+          <button class="btn quiet wide" id="see">Ver como quien la encuentra</button>
+          <p class="note">Sale en 1024 px. Va en el rebaje de 20 × 20 mm, negro sobre blanco.</p>`
+        : `<h3>Sin placa vinculada</h3><p>Ingresá el código y el PIN de la tarjeta que viene en el empaque.</p>
+          <div class="field"><input id="tcode" placeholder="Código de 8 caracteres" style="text-align:center"></div>
+          <div class="field"><input id="tpin" placeholder="PIN de 6 dígitos" style="text-align:center"></div>
+          <button class="btn wide" id="link">Vincular placa</button>
+          <div class="seed">Placas de prueba disponibles:<br>
+            ${Object.entries(S.tags).filter(([,t]) => !t.petId).slice(0,3)
+              .map(([c,t]) => `<code>${c}</code> · PIN ${t.pin}`).join("<br>")}</div>`}
+      </div>
+    </aside>
+  </div></div>`;
+}
+
+function publico(p, code){
+  if (!p) return `<div class="pub"><div class="pbody" style="padding-top:44px">
+      <h1 class="pname">Placa sin activar</h1>
+      <p style="color:var(--sage)">Esta placa todavía no tiene una mascota registrada.
+      Si es tuya, entrá a ${BASE.replace("/p/","")} y activala con el PIN de la tarjeta.</p>
+      <p style="margin-top:26px"><a href="#/panel">Volver</a></p></div></div>`;
+
+  const f = [];
+  if (p.temperament) f.push(["Su carácter", p.temperament]);
+  if (p.phone2)      f.push(["Otro número", p.phone2]);
+  if (p.showZone !== false && p.zone) f.push(["Vive en", p.zone]);
+  if (p.vet)         f.push(["Veterinaria", p.vet]);
+  if (p.vaccines)    f.push(["Vacunas", p.vaccines]);
+
+  return `<div class="pub">
+    ${p.lost ? `<div class="banner"><b>Esta mascota está perdida</b>Su familia la está buscando ahora mismo.</div>` : ""}
+    <div class="photo" ${p.photo ? `style="background-image:url(${p.photo})"` : ""}>${p.photo ? "" : "Sin foto"}</div>
+    <div class="pbody">
+      <h1 class="pname">${esc(p.name)}</h1>
+      <p class="pbreed">${esc(p.breed || p.species || "")}</p>
+      ${p.phone1 ? `<a class="call c1" href="tel:${tel(p.phone1)}">Llamar a su familia
+        <span class="callnum">${esc(p.ownerName)} · ${esc(p.phone1)}</span></a>
+        <a class="call c2" href="https://wa.me/${wa(p.phone1)}" target="_blank" rel="noopener">Escribir por WhatsApp</a>` : ""}
+      <dl class="facts">${f.map(([k,v]) =>
+        `<div class="fact"><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>
+      ${p.medical ? `<div class="med"><b>Cuidado médico</b>${esc(p.medical)}</div>` : ""}
+      <p class="foot">Placa Patitas · ${esc(code || "")}</p>
+    </div></div>`;
+}
+
+/* ============ lectura del formulario ============ */
+let pendingPhoto = null;
+function readForm(base){
+  const v = id => ($("#"+id) ? $("#"+id).value.trim() : "");
+  return Object.assign({}, base, {
+    name:v("f_name"), breed:v("f_breed"), species:"perro",
+    temperament:v("f_temp"), ownerName:v("f_owner"),
+    phone1:v("f_t1"), phone2:v("f_t2"), zone:v("f_zone"),
+    showZone:$("#f_showzone").checked, vet:v("f_vet"),
+    vaccines:v("f_vac"), medical:v("f_med"),
+    lost:$("#f_lost") ? $("#f_lost").checked : (base.lost || false),
+    photo: pendingPhoto || base.photo || ""
+  });
+}
+function wirePhoto(){
+  const el = $("#f_photo"); if (!el) return;
+  el.addEventListener("change", e => {
+    const file = e.target.files[0]; if (!file) return;
+    const r = new FileReader();
+    r.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        const s = Math.min(1, 640 / Math.max(img.width, img.height));
+        c.width = img.width*s; c.height = img.height*s;
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        pendingPhoto = c.toDataURL("image/jpeg", 0.72);
+        preview();
+      };
+      img.src = r.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
+function preview(){
+  const box = $("#prev"); if (!box) return;
+  const id = location.hash.split("/")[2];
+  box.innerHTML = publico(readForm(petBy(id) || {}), codeOf(id));
+}
+function drawQR(code){
+  const slot = $("#qr"); if (!slot) return;
+  slot.innerHTML = "";
+  new QRCode(slot, {text:"https://"+BASE+code, width:168, height:168, correctLevel:QRCode.CorrectLevel.Q});
+}
+
+/* ============ router ============ */
+async function render(){
+  const h = location.hash || (S.email ? "#/panel" : "#/entrar");
+  const part = h.split("/");
+
+  if (part[1] === "p"){
+    const code = (part[2]||"").toUpperCase();
+    $("#app").innerHTML = publico(petByCode(code), code);
+    return;
+  }
+  if (!S.email){ $("#app").innerHTML = vEntrar(); return wireEntrar(); }
+
+  if (part[1] === "nueva"){
+    pendingPhoto = null;
+    $("#app").innerHTML = vNueva(); wireChrome(); wirePhoto();
+    $("#save").onclick = async () => {
+      if (!$("#f_name").value.trim() || !$("#f_t1").value.trim())
+        return alert("El nombre y el teléfono principal son obligatorios.");
+      const p = readForm({id:uid(), lost:false});
+      S.pets.push(p); await savePets();
+      location.hash = "#/mascota/" + p.id;
+    };
+    return;
+  }
+  if (part[1] === "mascota"){
+    const id = part[2]; pendingPhoto = null;
+    $("#app").innerHTML = vMascota(id); wireChrome(); wirePhoto();
+    const code = codeOf(id);
+    preview();
+    if (code) drawQR(code);
+    $("#fm").addEventListener("input", preview);
+
+    $("#save").onclick = async () => {
+      const i = S.pets.findIndex(x => x.id === id);
+      S.pets[i] = readForm(S.pets[i]); await savePets();
+      $("#msg").innerHTML = `<div class="ok">Cambios guardados. El perfil público ya muestra los datos nuevos.</div>`;
+      preview();
+    };
+    $("#del").onclick = async () => {
+      if (!confirm("¿Eliminar esta mascota? La placa quedará libre.")) return;
+      const c = codeOf(id); if (c){ S.tags[c].petId = null; await set("pt:tags", S.tags); }
+      S.pets = S.pets.filter(x => x.id !== id); await savePets();
+      location.hash = "#/panel";
+    };
+    if ($("#see")) $("#see").onclick = () => { location.hash = "#/p/" + code; };
+    if ($("#dl")) $("#dl").onclick = () => {
+      const box = document.createElement("div");
+      new QRCode(box, {text:"https://"+BASE+code, width:1024, height:1024, correctLevel:QRCode.CorrectLevel.Q});
+      setTimeout(() => {
+        const a = document.createElement("a");
+        a.download = "patitas-" + code + ".png";
+        a.href = box.querySelector("canvas").toDataURL("image/png"); a.click();
+      }, 140);
+    };
+    if ($("#link")) $("#link").onclick = async () => {
+      const c = $("#tcode").value.trim().toUpperCase(), pin = $("#tpin").value.trim();
+      const t = S.tags[c];
+      if (!t) return alert("Ese código de placa no existe.");
+      if (t.pin !== pin) return alert("El PIN no corresponde a esa placa.");
+      if (t.petId) return alert("Esa placa ya está vinculada a otra mascota.");
+      t.petId = id; t.owner = S.email; await set("pt:tags", S.tags);
+      render();
+    };
+    return;
+  }
+
+  $("#app").innerHTML = vPanel(); wireChrome();
+  if ($("#new")) $("#new").onclick = () => { location.hash = "#/nueva"; };
+}
+
+function wireChrome(){
+  if ($("#out")) $("#out").onclick = async () => {
+    await set("pt:session", null); S.email = null; S.pets = [];
+    location.hash = "#/entrar"; render();
+  };
+}
+function wireEntrar(){
+  const go = async (crear) => {
+    const em = $("#em").value.trim().toLowerCase(), pw = $("#pw").value;
+    if (!em || !pw) return ($("#app").innerHTML = vEntrar("Escribí tu correo y tu contraseña."), wireEntrar());
+    const h = await hash(pw);
+    if (crear){
+      if (S.users[em]) return ($("#app").innerHTML = vEntrar("Ya existe una cuenta con ese correo."), wireEntrar());
+      S.users[em] = {h}; await set("pt:users", S.users);
+    } else {
+      if (!S.users[em] || S.users[em].h !== h)
+        return ($("#app").innerHTML = vEntrar("Ese correo o esa contraseña no coinciden."), wireEntrar());
+    }
+    S.email = em; await set("pt:session", em);
+    S.pets = await get("pt:pets:" + em, []);
+    location.hash = "#/panel"; render();
+  };
+  $("#in").onclick = () => go(false);
+  $("#up").onclick = () => go(true);
+  $("#pw").onkeydown = e => { if (e.key === "Enter") go(false); };
+}
+
+window.addEventListener("hashchange", render);
+load().then(render);
+</script>
+</body>
+</html>
