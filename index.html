@@ -112,21 +112,61 @@ legend{font-family:"Archivo Narrow";font-weight:600;font-size:18px;padding-right
 <body>
 <div id="app"></div>
 
-<script>
-/* ============ almacenamiento ============ */
-const mem = new Map();
-const hasStore = typeof window.storage !== "undefined" && window.storage;
-let hasLocal = true;
-try { localStorage.setItem("pt:probe", "1"); localStorage.removeItem("pt:probe"); } catch(e){ hasLocal = false; }
-async function get(k, d){
-  if (hasStore){ try { const r = await window.storage.get(k); return r ? JSON.parse(r.value) : d; } catch(e){ return d; } }
-  if (hasLocal){ try { const r = localStorage.getItem(k); return r !== null ? JSON.parse(r) : d; } catch(e){ return d; } }
-  return mem.has(k) ? mem.get(k) : d;
+<script type="module">
+/* ============ backend (Firebase) ============ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, query, where, limit, getDocs
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC98VtNNwp8LKX8kmy9V1aRjVLaS9hgRX0",
+  authDomain: "patitas-web-fc04b.firebaseapp.com",
+  projectId: "patitas-web-fc04b",
+  storageBucket: "patitas-web-fc04b.firebasestorage.app",
+  messagingSenderId: "733019949148",
+  appId: "1:733019949148:web:970763796eefb35c087e99"
+};
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
+const petsCol = collection(db, "pets");
+
+async function loadMyPets(){
+  if (!S.user) { S.pets = []; return; }
+  const snap = await getDocs(query(petsCol, where("ownerUid", "==", S.user.uid)));
+  S.pets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
-async function set(k, v){
-  if (hasStore){ try { await window.storage.set(k, JSON.stringify(v)); return; } catch(e){} }
-  if (hasLocal){ try { localStorage.setItem(k, JSON.stringify(v)); return; } catch(e){} }
-  mem.set(k, v);
+async function findPetByCode(code){
+  const snap = await getDocs(query(petsCol, where("code", "==", code), limit(1)));
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, ...d.data() };
+}
+async function createPet(data){
+  const ref = doc(petsCol);
+  const pet = Object.assign({}, data, { id: ref.id, ownerUid: S.user.uid });
+  await setDoc(ref, pet);
+  return pet;
+}
+async function savePet(pet){
+  const { id, ...data } = pet;
+  await updateDoc(doc(db, "pets", id), data);
+}
+async function deletePet(id){
+  await deleteDoc(doc(db, "pets", id));
+}
+async function ensureCode(pet){
+  if (pet.code) return pet.code;
+  let code;
+  do { code = rand(8); }
+  while (!(await getDocs(query(petsCol, where("code", "==", code), limit(1)))).empty);
+  await updateDoc(doc(db, "pets", pet.id), { code });
+  pet.code = code;
+  return code;
 }
 
 /* ============ utilidades ============ */
@@ -134,42 +174,23 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[<>&"]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
 const alfa = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const rand = n => Array.from({length:n}, () => alfa[Math.floor(Math.random()*alfa.length)]).join("");
-const uid  = () => Date.now().toString(36) + rand(4);
 const tel  = t => String(t||"").replace(/\D/g,"");
 const wa   = t => { const d = tel(t); return d.startsWith("504") ? d : "504" + d; };
-async function hash(s){
-  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2,"0")).join("");
-}
 const siteURL = () => location.href.split("#")[0];
 const tagURL  = code => siteURL() + "#/p/" + code;
+const AUTH_ERRORS = {
+  "auth/email-already-in-use": "Ya existe una cuenta con ese correo.",
+  "auth/invalid-credential": "Ese correo o esa contraseña no coinciden.",
+  "auth/wrong-password": "Ese correo o esa contraseña no coinciden.",
+  "auth/user-not-found": "Ese correo o esa contraseña no coinciden.",
+  "auth/weak-password": "La contraseña debe tener al menos 6 caracteres.",
+  "auth/invalid-email": "Ese correo no es válido."
+};
 
 /* ============ estado ============ */
-let S = { email:null, users:{}, pets:[], tags:{} };
-
-async function load(){
-  S.users = await get("pt:users", {});
-  S.tags  = await get("pt:tags", {});
-  S.email = await get("pt:session", null);
-  if (S.email) S.pets = await get("pt:pets:" + S.email, []);
-}
-const savePets = () => set("pt:pets:" + S.email, S.pets);
+let S = { user:null, pets:[] };
 const petBy = id => S.pets.find(p => p.id === id);
-async function petByCode(c){
-  const t = S.tags[c];
-  if (!t || !t.petId) return null;
-  const pets = t.owner === S.email ? S.pets : await get("pt:pets:" + t.owner, []);
-  return pets.find(p => p.id === t.petId) || null;
-}
-const codeOf = id => Object.keys(S.tags).find(c => S.tags[c].petId === id) || null;
-async function ensureCode(id){
-  let c = codeOf(id);
-  if (c) return c;
-  do { c = rand(8); } while (S.tags[c]);
-  S.tags[c] = {petId:id, owner:S.email};
-  await set("pt:tags", S.tags);
-  return c;
-}
+const codeOf = id => { const p = petBy(id); return p && p.code ? p.code : null; };
 
 /* ============ chrome ============ */
 const LOGO = `<svg class="mark" viewBox="0 0 48 56" aria-hidden="true">
@@ -180,10 +201,9 @@ const LOGO = `<svg class="mark" viewBox="0 0 48 56" aria-hidden="true">
 
 const bar = () => `<header class="top">${LOGO}
   <div class="wordmark">PATITAS</div><div class="sp"></div>
-  ${S.email ? `<span class="who">${esc(S.email)}</span>
+  ${S.user ? `<span class="who">${esc(S.user.email)}</span>
     <button class="btn ghost" id="out" style="padding:7px 14px;font-size:14px">Salir</button>` : ""}
-</header>
-<p class="demoflag">Demo funcional. Las cuentas y las mascotas se guardan en este navegador.</p>`;
+</header>`;
 
 /* ============ pantallas ============ */
 function vEntrar(msg){
@@ -370,15 +390,15 @@ function drawQR(code){
 
 /* ============ router ============ */
 async function render(){
-  const h = location.hash || (S.email ? "#/panel" : "#/entrar");
+  const h = location.hash || (S.user ? "#/panel" : "#/entrar");
   const part = h.split("/");
 
   if (part[1] === "p"){
     const code = (part[2]||"").toUpperCase();
-    $("#app").innerHTML = publico(await petByCode(code), code);
+    $("#app").innerHTML = publico(await findPetByCode(code), code);
     return;
   }
-  if (!S.email){ $("#app").innerHTML = vEntrar(); return wireEntrar(); }
+  if (!S.user){ $("#app").innerHTML = vEntrar(); return wireEntrar(); }
 
   if (part[1] === "nueva"){
     pendingPhoto = null;
@@ -386,16 +406,17 @@ async function render(){
     $("#save").onclick = async () => {
       if (!$("#f_name").value.trim() || !$("#f_t1").value.trim())
         return alert("El nombre y el teléfono principal son obligatorios.");
-      const p = readForm({id:uid(), lost:false});
-      S.pets.push(p); await savePets();
-      location.hash = "#/mascota/" + p.id;
+      const pet = await createPet(readForm({lost:false}));
+      S.pets.push(pet);
+      location.hash = "#/mascota/" + pet.id;
     };
     return;
   }
   if (part[1] === "mascota"){
     const id = part[2]; pendingPhoto = null;
-    if (!petBy(id)){ location.hash = "#/panel"; return; }
-    const code = await ensureCode(id);
+    const pet = petBy(id);
+    if (!pet){ location.hash = "#/panel"; return; }
+    const code = await ensureCode(pet);
     $("#app").innerHTML = vMascota(id); wireChrome(); wirePhoto();
     preview();
     drawQR(code);
@@ -403,14 +424,15 @@ async function render(){
 
     $("#save").onclick = async () => {
       const i = S.pets.findIndex(x => x.id === id);
-      S.pets[i] = readForm(S.pets[i]); await savePets();
+      S.pets[i] = readForm(S.pets[i]);
+      await savePet(S.pets[i]);
       $("#msg").innerHTML = `<div class="ok">Cambios guardados. El perfil público ya muestra los datos nuevos.</div>`;
       preview();
     };
     $("#del").onclick = async () => {
       if (!confirm("¿Eliminar esta mascota? Su placa dejará de funcionar.")) return;
-      const c = codeOf(id); if (c){ delete S.tags[c]; await set("pt:tags", S.tags); }
-      S.pets = S.pets.filter(x => x.id !== id); await savePets();
+      await deletePet(id);
+      S.pets = S.pets.filter(x => x.id !== id);
       location.hash = "#/panel";
     };
     $("#see").onclick = () => { location.hash = "#/p/" + code; };
@@ -433,7 +455,8 @@ async function render(){
 
 function wireChrome(){
   if ($("#out")) $("#out").onclick = async () => {
-    await set("pt:session", null); S.email = null; S.pets = [];
+    await signOut(auth);
+    S.pets = [];
     location.hash = "#/entrar"; render();
   };
 }
@@ -441,16 +464,15 @@ function wireEntrar(){
   const go = async (crear) => {
     const em = $("#em").value.trim().toLowerCase(), pw = $("#pw").value;
     if (!em || !pw) return ($("#app").innerHTML = vEntrar("Escribí tu correo y tu contraseña."), wireEntrar());
-    const h = await hash(pw);
-    if (crear){
-      if (S.users[em]) return ($("#app").innerHTML = vEntrar("Ya existe una cuenta con ese correo."), wireEntrar());
-      S.users[em] = {h}; await set("pt:users", S.users);
-    } else {
-      if (!S.users[em] || S.users[em].h !== h)
-        return ($("#app").innerHTML = vEntrar("Ese correo o esa contraseña no coinciden."), wireEntrar());
+    try {
+      if (crear) await createUserWithEmailAndPassword(auth, em, pw);
+      else await signInWithEmailAndPassword(auth, em, pw);
+    } catch(e){
+      $("#app").innerHTML = vEntrar(AUTH_ERRORS[e.code] || "Ocurrió un error. Intentá de nuevo.");
+      return wireEntrar();
     }
-    S.email = em; await set("pt:session", em);
-    S.pets = await get("pt:pets:" + em, []);
+    S.user = auth.currentUser;
+    await loadMyPets();
     location.hash = "#/panel"; render();
   };
   $("#in").onclick = () => go(false);
@@ -459,7 +481,11 @@ function wireEntrar(){
 }
 
 window.addEventListener("hashchange", render);
-load().then(render);
+onAuthStateChanged(auth, async (user) => {
+  S.user = user;
+  if (user) await loadMyPets(); else S.pets = [];
+  render();
+});
 </script>
 </body>
 </html>
