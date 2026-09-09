@@ -116,12 +116,16 @@ legend{font-family:"Archivo Narrow";font-weight:600;font-size:18px;padding-right
 /* ============ almacenamiento ============ */
 const mem = new Map();
 const hasStore = typeof window.storage !== "undefined" && window.storage;
+let hasLocal = true;
+try { localStorage.setItem("pt:probe", "1"); localStorage.removeItem("pt:probe"); } catch(e){ hasLocal = false; }
 async function get(k, d){
   if (hasStore){ try { const r = await window.storage.get(k); return r ? JSON.parse(r.value) : d; } catch(e){ return d; } }
+  if (hasLocal){ try { const r = localStorage.getItem(k); return r !== null ? JSON.parse(r) : d; } catch(e){ return d; } }
   return mem.has(k) ? mem.get(k) : d;
 }
 async function set(k, v){
   if (hasStore){ try { await window.storage.set(k, JSON.stringify(v)); return; } catch(e){} }
+  if (hasLocal){ try { localStorage.setItem(k, JSON.stringify(v)); return; } catch(e){} }
   mem.set(k, v);
 }
 
@@ -137,26 +141,35 @@ async function hash(s){
   const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2,"0")).join("");
 }
-const BASE = "patitasmascotas.com/p/";
+const siteURL = () => location.href.split("#")[0];
+const tagURL  = code => siteURL() + "#/p/" + code;
 
 /* ============ estado ============ */
 let S = { email:null, users:{}, pets:[], tags:{} };
 
 async function load(){
   S.users = await get("pt:users", {});
-  S.tags  = await get("pt:tags", null);
-  if (!S.tags){                       // lote de fábrica de ejemplo
-    S.tags = {};
-    ["481920","307455","662108"].forEach(pin => { S.tags[rand(8)] = {pin, petId:null, owner:null}; });
-    await set("pt:tags", S.tags);
-  }
+  S.tags  = await get("pt:tags", {});
   S.email = await get("pt:session", null);
   if (S.email) S.pets = await get("pt:pets:" + S.email, []);
 }
 const savePets = () => set("pt:pets:" + S.email, S.pets);
 const petBy = id => S.pets.find(p => p.id === id);
-const petByCode = c => { const t = S.tags[c]; return t && t.petId ? petBy(t.petId) : null; };
+async function petByCode(c){
+  const t = S.tags[c];
+  if (!t || !t.petId) return null;
+  const pets = t.owner === S.email ? S.pets : await get("pt:pets:" + t.owner, []);
+  return pets.find(p => p.id === t.petId) || null;
+}
 const codeOf = id => Object.keys(S.tags).find(c => S.tags[c].petId === id) || null;
+async function ensureCode(id){
+  let c = codeOf(id);
+  if (c) return c;
+  do { c = rand(8); } while (S.tags[c]);
+  S.tags[c] = {petId:id, owner:S.email};
+  await set("pt:tags", S.tags);
+  return c;
+}
 
 /* ============ chrome ============ */
 const LOGO = `<svg class="mark" viewBox="0 0 48 56" aria-hidden="true">
@@ -241,7 +254,7 @@ const form = (p={}) => `
 function vNueva(){
   return bar() + `<div class="narrowcol" style="max-width:640px">
     <h1 class="page">Registrar una mascota</h1>
-    <p class="sub">Podés vincular la placa después, cuando la tengas en la mano.</p>
+    <p class="sub">Al guardar se genera automáticamente su placa con código QR propio.</p>
     <div class="card" id="fm">${form({})}
       <button class="btn wide" id="save">Guardar mascota</button></div>
   </div>`;
@@ -269,19 +282,12 @@ function vMascota(id){
     <aside class="side">
       <div class="phone"><div class="screen" id="prev"></div></div>
       <div class="qrbox">
-        ${code ? `<h3>Placa ${esc(code)}</h3><p>Este código no cambia nunca.</p>
-          <div class="qrslot" id="qr"></div>
-          <div class="url">${BASE}${esc(code)}</div>
-          <button class="btn wide" id="dl">Descargar QR para imprimir</button>
-          <button class="btn quiet wide" id="see">Ver como quien la encuentra</button>
-          <p class="note">Sale en 1024 px. Va en el rebaje de 20 × 20 mm, negro sobre blanco.</p>`
-        : `<h3>Sin placa vinculada</h3><p>Ingresá el código y el PIN de la tarjeta que viene en el empaque.</p>
-          <div class="field"><input id="tcode" placeholder="Código de 8 caracteres" style="text-align:center"></div>
-          <div class="field"><input id="tpin" placeholder="PIN de 6 dígitos" style="text-align:center"></div>
-          <button class="btn wide" id="link">Vincular placa</button>
-          <div class="seed">Placas de prueba disponibles:<br>
-            ${Object.entries(S.tags).filter(([,t]) => !t.petId).slice(0,3)
-              .map(([c,t]) => `<code>${c}</code> · PIN ${t.pin}`).join("<br>")}</div>`}
+        <h3>Placa ${esc(code)}</h3><p>Este código se generó solo y no cambia nunca.</p>
+        <div class="qrslot" id="qr"></div>
+        <div class="url">${esc(tagURL(code))}</div>
+        <button class="btn wide" id="dl">Descargar QR para imprimir</button>
+        <button class="btn quiet wide" id="see">Ver como quien la encuentra</button>
+        <p class="note">Sale en 1024 px. Va en el rebaje de 20 × 20 mm, negro sobre blanco.</p>
       </div>
     </aside>
   </div></div>`;
@@ -289,9 +295,8 @@ function vMascota(id){
 
 function publico(p, code){
   if (!p) return `<div class="pub"><div class="pbody" style="padding-top:44px">
-      <h1 class="pname">Placa sin activar</h1>
-      <p style="color:var(--sage)">Esta placa todavía no tiene una mascota registrada.
-      Si es tuya, entrá a ${BASE.replace("/p/","")} y activala con el PIN de la tarjeta.</p>
+      <h1 class="pname">Código no encontrado</h1>
+      <p style="color:var(--sage)">Este código no corresponde a ninguna mascota registrada.</p>
       <p style="margin-top:26px"><a href="#/panel">Volver</a></p></div></div>`;
 
   const f = [];
@@ -359,7 +364,8 @@ function preview(){
 function drawQR(code){
   const slot = $("#qr"); if (!slot) return;
   slot.innerHTML = "";
-  new QRCode(slot, {text:"https://"+BASE+code, width:168, height:168, correctLevel:QRCode.CorrectLevel.Q});
+  if (typeof QRCode === "undefined"){ slot.textContent = "No se pudo cargar el QR."; return; }
+  new QRCode(slot, {text:tagURL(code), width:168, height:168, correctLevel:QRCode.CorrectLevel.Q});
 }
 
 /* ============ router ============ */
@@ -369,7 +375,7 @@ async function render(){
 
   if (part[1] === "p"){
     const code = (part[2]||"").toUpperCase();
-    $("#app").innerHTML = publico(petByCode(code), code);
+    $("#app").innerHTML = publico(await petByCode(code), code);
     return;
   }
   if (!S.email){ $("#app").innerHTML = vEntrar(); return wireEntrar(); }
@@ -388,10 +394,11 @@ async function render(){
   }
   if (part[1] === "mascota"){
     const id = part[2]; pendingPhoto = null;
+    if (!petBy(id)){ location.hash = "#/panel"; return; }
+    const code = await ensureCode(id);
     $("#app").innerHTML = vMascota(id); wireChrome(); wirePhoto();
-    const code = codeOf(id);
     preview();
-    if (code) drawQR(code);
+    drawQR(code);
     $("#fm").addEventListener("input", preview);
 
     $("#save").onclick = async () => {
@@ -401,29 +408,21 @@ async function render(){
       preview();
     };
     $("#del").onclick = async () => {
-      if (!confirm("¿Eliminar esta mascota? La placa quedará libre.")) return;
-      const c = codeOf(id); if (c){ S.tags[c].petId = null; await set("pt:tags", S.tags); }
+      if (!confirm("¿Eliminar esta mascota? Su placa dejará de funcionar.")) return;
+      const c = codeOf(id); if (c){ delete S.tags[c]; await set("pt:tags", S.tags); }
       S.pets = S.pets.filter(x => x.id !== id); await savePets();
       location.hash = "#/panel";
     };
-    if ($("#see")) $("#see").onclick = () => { location.hash = "#/p/" + code; };
-    if ($("#dl")) $("#dl").onclick = () => {
+    $("#see").onclick = () => { location.hash = "#/p/" + code; };
+    $("#dl").onclick = () => {
+      if (typeof QRCode === "undefined") return alert("No se pudo cargar el generador de QR. Revisá tu conexión e intentá de nuevo.");
       const box = document.createElement("div");
-      new QRCode(box, {text:"https://"+BASE+code, width:1024, height:1024, correctLevel:QRCode.CorrectLevel.Q});
+      new QRCode(box, {text:tagURL(code), width:1024, height:1024, correctLevel:QRCode.CorrectLevel.Q});
       setTimeout(() => {
         const a = document.createElement("a");
         a.download = "patitas-" + code + ".png";
         a.href = box.querySelector("canvas").toDataURL("image/png"); a.click();
       }, 140);
-    };
-    if ($("#link")) $("#link").onclick = async () => {
-      const c = $("#tcode").value.trim().toUpperCase(), pin = $("#tpin").value.trim();
-      const t = S.tags[c];
-      if (!t) return alert("Ese código de placa no existe.");
-      if (t.pin !== pin) return alert("El PIN no corresponde a esa placa.");
-      if (t.petId) return alert("Esa placa ya está vinculada a otra mascota.");
-      t.petId = id; t.owner = S.email; await set("pt:tags", S.tags);
-      render();
     };
     return;
   }
